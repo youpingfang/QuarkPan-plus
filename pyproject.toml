@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "quarkpan"
-version = "1.0.5"
+name = "quarkpan-plus"
+version = "1.0.6"
 description = "夸克网盘 Python 客户端和命令行工具"
 readme = "README.md"
 license = {file = "LICENSE"}
