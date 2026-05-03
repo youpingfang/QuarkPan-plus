@@ -265,6 +265,10 @@ class InteractiveShell:
             files = self.client.list_files(self.current_folder_id, size=50)  # type: ignore[attr-defined]
             file_list = files.get('data', {}).get('list', [])
 
+            # 缓存本次列表结果：用于支持后续通过"序号"操作（cd 3 / download 2 / rm 5 ...）
+            self._last_list_folder_id = self.current_folder_id
+            self._last_list_entries = list(file_list) if file_list else []
+
             if not file_list:
                 print_info("目录为空")
                 return
