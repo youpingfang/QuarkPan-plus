@@ -32,6 +32,11 @@ class InteractiveShell:
         # 目录栈：存储 (folder_id, folder_name) 的路径
         self.directory_stack = [("0", "根目录")]
 
+        # 最近一次 ls/ll 的结果缓存：用于支持“用序号操作”（cd 3 / download 2 / rm 5 ...）
+        # 只对“当前目录”的列表生效；如果你没先 ls，就不会有缓存。
+        self._last_list_folder_id: str | None = None
+        self._last_list_entries: list[dict] = []  # 原始 file_info 列表（含 fid/file_name/file_type 等）
+
         # 命令映射
         self.commands = {
             'help': self.cmd_help,
@@ -227,6 +232,10 @@ class InteractiveShell:
             files = self.client.list_files(target_folder_id, size=50)  # type: ignore[attr-defined]
             file_list = files.get('data', {}).get('list', [])
 
+            # 缓存本次列表结果：用于支持后续通过“序号”操作（cd 3 / download 2 / rm 5 ...）
+            self._last_list_folder_id = target_folder_id
+            self._last_list_entries = list(file_list) if file_list else []
+
             if not file_list:
                 print_info("目录为空")
                 return
@@ -234,7 +243,7 @@ class InteractiveShell:
             # 显示目录信息 - 使用友好显示名称
             display_name = self._get_display_name(target_folder_name, max_length=50)
             print_info(f"目录: {display_name}")
-            print_info(f"共 {len(file_list)} 个项目\n")
+            print_info(f"共 {len(file_list)} 个项目（可用序号操作：cd 3 / download 2 / rm 5）\n")
 
             for i, file_info in enumerate(file_list, 1):
                 name = file_info.get('file_name', '未知')
@@ -292,6 +301,28 @@ class InteractiveShell:
             return
 
         path = args[0]
+
+        # 允许用序号切换：cd 3 或 cd #3（# 形式用于与同名“数字文件夹/文件”消歧）
+        idx_token = path[1:] if path.startswith('#') else path
+        if idx_token.isdigit():
+            if self._last_list_folder_id != self.current_folder_id or not self._last_list_entries:
+                print_error("未找到可用的列表缓存，请先执行 ls 再用序号 cd")
+                return
+            idx = int(idx_token)
+            if idx < 1 or idx > len(self._last_list_entries):
+                print_error(f"序号超出范围: {idx}，有效范围 1-{len(self._last_list_entries)}")
+                return
+            entry = self._last_list_entries[idx - 1]
+            if entry.get('file_type', 1) != 0:
+                print_error(f"序号 {idx} 不是文件夹，无法 cd")
+                return
+            file_id = entry.get('fid')
+            folder_name = entry.get('file_name', path)
+            if not file_id:
+                print_error("无法获取该目录的 fid")
+                return
+            self._change_to_directory(str(file_id), str(folder_name))
+            return
 
         try:
             if path == "..":
@@ -370,10 +401,31 @@ class InteractiveShell:
     def cmd_download(self, args: List[str]):
         """下载文件"""
         if not args:
-            print_error("请提供要下载的文件路径")
+            print_error("请提供要下载的文件路径（或先 ls 再用序号：download 2）")
             return
 
         path = args[0]
+
+        # 允许用序号下载：download 2 或 download #2（# 形式用于与同名“数字文件”消歧）
+        idx_token = path[1:] if path.startswith('#') else path
+        if idx_token.isdigit():
+            if self._last_list_folder_id != self.current_folder_id or not self._last_list_entries:
+                print_error("未找到可用的列表缓存，请先执行 ls 再用序号 download")
+                return
+            idx = int(idx_token)
+            if idx < 1 or idx > len(self._last_list_entries):
+                print_error(f"序号超出范围: {idx}，有效范围 1-{len(self._last_list_entries)}")
+                return
+            entry = self._last_list_entries[idx - 1]
+            name = entry.get('file_name')
+            if not name:
+                print_error("无法获取该项名称")
+                return
+            # 文件夹不支持 download（保持原有行为）
+            if entry.get('file_type', 1) == 0:
+                print_error(f"序号 {idx} 是文件夹，不能 download；如需下载请打包或用分享")
+                return
+            path = str(name)
 
         try:
             print_info(f"准备下载: {path}")
@@ -419,13 +471,44 @@ class InteractiveShell:
     def cmd_remove(self, args: List[str]):
         """删除文件"""
         if not args:
-            print_error("请提供要删除的文件路径")
+            print_error("请提供要删除的文件路径（或先 ls 再用序号：rm 5）")
             return
 
-        try:
-            print_warning(f"准备删除 {len(args)} 个文件/文件夹:")
+        # 支持序号：rm 5 / rm 2 3 4 / rm #5 / rm #2 #3
+        resolved_args: List[str] = []
 
-            for i, path in enumerate(args, 1):
+        def _is_index_token(t: str) -> bool:
+            if t.startswith('#'):
+                t = t[1:]
+            return t.isdigit()
+
+        if all(_is_index_token(a) for a in args):
+            if self._last_list_folder_id != self.current_folder_id or not self._last_list_entries:
+                print_error("未找到可用的列表缓存，请先执行 ls 再用序号 rm")
+                return
+            for a in args:
+                idx_token = a[1:] if a.startswith('#') else a
+                idx = int(idx_token)
+                if idx < 1 or idx > len(self._last_list_entries):
+                    print_error(f"序号超出范围: {idx}，有效范围 1-{len(self._last_list_entries)}")
+                    return
+                entry = self._last_list_entries[idx - 1]
+                name = entry.get('file_name')
+                if not name:
+                    print_error(f"序号 {idx} 无法获取名称")
+                    return
+                # 文件夹在显示时带 /，这里保持和原实现一致：删除文件夹要以路径解析为准
+                if entry.get('file_type', 1) == 0:
+                    resolved_args.append(f"{name}/")
+                else:
+                    resolved_args.append(str(name))
+        else:
+            resolved_args = args
+
+        try:
+            print_warning(f"准备删除 {len(resolved_args)} 个文件/文件夹:")
+
+            for i, path in enumerate(resolved_args, 1):
                 print_info(f"  {i}. {path}")
 
             from rich.prompt import Confirm
@@ -433,7 +516,7 @@ class InteractiveShell:
                 print_info("取消删除操作")
                 return
 
-            result = self.client.delete_files_by_name(args, self.current_folder_id)  # type: ignore[attr-defined]
+            result = self.client.delete_files_by_name(resolved_args, self.current_folder_id)  # type: ignore[attr-defined]
 
             if result and result.get('status') == 200:
                 print_success(f"成功删除 {len(args)} 个文件/文件夹")
@@ -447,11 +530,28 @@ class InteractiveShell:
     def cmd_rename(self, args: List[str]):
         """重命名文件"""
         if len(args) < 2:
-            print_error("请提供原文件名和新文件名")
+            print_error("请提供原文件名和新文件名（或先 ls 再用序号：rename 3 新名字）")
             return
 
         old_path = args[0]
         new_name = args[1]
+
+        # 支持序号：rename 3 newname 或 rename #3 newname（# 形式用于与同名“数字文件/目录”消歧）
+        idx_token = old_path[1:] if old_path.startswith('#') else old_path
+        if idx_token.isdigit():
+            if self._last_list_folder_id != self.current_folder_id or not self._last_list_entries:
+                print_error("未找到可用的列表缓存，请先执行 ls 再用序号 rename")
+                return
+            idx = int(idx_token)
+            if idx < 1 or idx > len(self._last_list_entries):
+                print_error(f"序号超出范围: {idx}，有效范围 1-{len(self._last_list_entries)}")
+                return
+            entry = self._last_list_entries[idx - 1]
+            name = entry.get('file_name')
+            if not name:
+                print_error(f"序号 {idx} 无法获取名称")
+                return
+            old_path = f"{name}/" if entry.get('file_type', 1) == 0 else str(name)
 
         try:
             result = self.client.rename_file_by_name(  # type: ignore[attr-defined]

@@ -1,8 +1,12 @@
-# QuarkPan - 夸克网盘 Python 客户端
+# QuarkPan Plus - 夸克网盘增强版 Python 客户端
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![PyPi](https://img.shields.io/pypi/v/quarkpan.svg)](https://pypi.python.org/pypi/quarkpan)
+
+> **本项目是基于 [QuarkPan](https://github.com/youpingfang/QuarkPan-plus) 的增强版**，在原有功能基础上新增了交互模式下的**序号操作**特性，让文件管理更加高效便捷。
+
+
 
 一个功能完整的夸克网盘 Python API 客户端和命令行工具，支持文件管理、上传下载、分享转存等核心功能。提供简洁的 Python API 接口和强大的命令行工具，满足自动化脚本和日常使用需求。
 
@@ -47,6 +51,19 @@
 - **美观输出**: 使用 Rich 库提供彩色和格式化的终端输出
 - **批量脚本**: 支持批量操作脚本和自动化任务
 
+## 🆕 新增特性：序号操作
+
+交互模式下执行 `ls` 或 `ll` 后，结果会缓存下来。之后可以直接用列表中的序号来操作文件或文件夹，无需输入完整路径。
+
+| 操作 | 示例 | 说明 |
+|---|---|---|
+| 进入文件夹 | `cd 3` | 进入序号 3 的文件夹 |
+| 下载文件 | `download 2` | 下载序号 2 的文件 |
+| 删除文件 | `rm 5` 或 `rm 2 3 4` | 删除序号 2、3、4 |
+| 消歧写法 | `cd #3` 或 `download #2` | `#` 前缀明确表示是序号，避免与同名数字文件夹/文件冲突 |
+
+> ⚠️ 使用序号前需先执行 `ls` 或 `ll` 建立缓存，否则序号无效。
+
 ## 🚀 快速开始
 
 ### 安装
@@ -58,7 +75,7 @@ pip install quarkpan
 #### 方法二：从源码安装
 ```bash
 # 克隆项目
-git clone https://github.com/lich0821/QuarkPan.git
+git clone https://github.com/youpingfang/QuarkPan-plus.git
 cd QuarkPan
 
 # 安装依赖
@@ -71,7 +88,7 @@ pip install -e .
 #### 方法三：直接使用
 ```bash
 # 克隆后直接运行
-git clone https://github.com/lich0821/QuarkPan.git
+git clone https://github.com/youpingfang/QuarkPan-plus.git
 cd QuarkPan
 pip install -r requirements.txt
 
@@ -733,7 +750,7 @@ pip install -r requirements.txt pytest pytest-asyncio
 - **命令行乱码**: 确保终端支持 UTF-8 编码
 
 ### 获取帮助
-- **GitHub Issues**: [提交问题报告](https://github.com/lich0821/QuarkPan/issues)
+- **GitHub Issues**: [提交问题报告](https://github.com/youpingfang/QuarkPan-plus/issues)
 - **示例代码**: 参考 `examples/` 目录下的示例文件
 - **微信群**: 发送 `WCF` 进群交流
 <center>
