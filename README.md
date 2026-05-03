@@ -92,7 +92,7 @@ pip install quarkpan-plus
 ```bash
 # 克隆项目
 git clone https://github.com/youpingfang/QuarkPan-plus.git
-cd QuarkPan
+cd QuarkPan-plus
 
 # 安装依赖
 pip install -r requirements.txt
@@ -105,7 +105,7 @@ pip install -e .
 ```bash
 # 克隆后直接运行
 git clone https://github.com/youpingfang/QuarkPan-plus.git
-cd QuarkPan
+cd QuarkPan-plus
 pip install -r requirements.txt
 
 # 三种运行方式任选其一：
